@@ -1,67 +1,38 @@
-import os
-import subprocess
-import sys
-from pathlib import Path
+name: Download memes
 
+on:
+  workflow_dispatch:
+    inputs:
+      links:
+        description: Links to channels or playlists separated by space
+        required: true
+      max_videos:
+        description: Max videos (200-300 is best)
+        default: "300"
 
-def main() -> int:
-    links_raw = os.environ.get("LINKS", "").strip()
-    if not links_raw:
-        print("ERROR: LINKS пустой", file=sys.stderr)
-        return 1
+jobs:
+  download:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
 
-    try:
-        max_videos = int(os.environ.get("MAX_VIDEOS", "300"))
-    except ValueError:
-        print("WARNING: MAX_VIDEOS некорректный, беру 300", file=sys.stderr)
-        max_videos = 300
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
 
-    links = links_raw.split()
-    out_dir = Path("memes")
-    out_dir.mkdir(parents=True, exist_ok=True)
+      - name: Install yt-dlp
+        run: pip install -U yt-dlp
 
-    print(f"Ссылок: {len(links)}")
-    print(f"Максимум роликов: {max_videos}")
-    print(f"Папка: {out_dir.resolve()}")
-    print()
+      - name: Download videos
+        env:
+          LINKS: ${{ inputs.links }}
+          MAX_VIDEOS: ${{ inputs.max_videos }}
+        run: python download.py
 
-    for i, link in enumerate(links, 1):
-        existing = len([p for p in out_dir.iterdir() if p.is_file()])
-        if existing >= max_videos:
-            print(f"[{i}/{len(links)}] Лимит достигнут ({existing}/{max_videos}), пропуск: {link}")
-            continue
-
-        remaining = max_videos - existing
-        print(f"[{i}/{len(links)}] Качаю до {remaining} из: {link}")
-
-        cmd = [
-            "yt-dlp",
-            "--no-warnings",
-            "--ignore-errors",
-            "--no-progress",
-            "--restrict-filenames",
-            "--no-playlist-reverse",
-            "-f", "bv*[ext=mp4]+ba[ext=m4a]/b[ext=mp4]/b",
-            "--merge-output-format", "mp4",
-            "-o", str(out_dir / "%(uploader)s_%(id)s.%(ext)s"),
-            "--playlist-end", str(remaining),
-            link,
-        ]
-
-        try:
-            result = subprocess.run(cmd)
-            if result.returncode != 0:
-                print(f"  yt-dlp вернул код {result.returncode} для {link}", file=sys.stderr)
-        except FileNotFoundError:
-            print("ERROR: yt-dlp не найден в PATH", file=sys.stderr)
-            return 1
-
-    files = [p for p in out_dir.iterdir() if p.is_file() and not p.name.endswith(".part")]
-    total_size = sum(p.stat().st_size for p in files)
-    print()
-    print(f"Готово. Файлов: {len(files)}, размер: {total_size / (1024 * 1024):.1f} MB")
-    return 0
-
-
-if __name__ == "__main__":
-    sys.exit(main())
+      - name: Upload zip
+        uses: actions/upload-artifact@v4
+        with:
+          name: memes
+          path: memes
+          compression-level: 0
+          retention-days: 3
