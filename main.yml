@@ -1,0 +1,38 @@
+name: Download memes
+
+on:
+  workflow_dispatch:
+    inputs:
+      links:
+        description: "Ссылки на каналы / плейлисты / ролики (через пробел)"
+        required: true
+      max_videos:
+        description: "Максимум роликов (лучше 200-300, лимит места на GitHub)"
+        default: "300"
+
+jobs:
+  download:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install yt-dlp
+        run: pip install -U yt-dlp
+
+      - name: Download videos
+        env:
+          LINKS: ${{ inputs.links }}
+          MAX_VIDEOS: ${{ inputs.max_videos }}
+        run: python download.py
+
+      - name: Upload zip
+        uses: actions/upload-artifact@v4
+        with:
+          name: memes
+          path: memes
+          compression-level: 0
+          retention-days: 3
